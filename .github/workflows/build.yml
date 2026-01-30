@@ -1,4 +1,4 @@
-name: Build All Platforms (Offline Libraries)
+name: Build All Platforms
 
 on: [push, workflow_dispatch]
 
@@ -14,26 +14,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- 1. SETUP DIPENDENZE ---
-      - name: Setup Linux Dependencies
+      # --- 1. SETUP DIPENDENZE E DOWNLOAD ---
+      - name: Setup Linux (Download Raylib 5.5)
         if: matrix.os == 'ubuntu-latest'
-        # Installiamo solo gli strumenti di base, le libs sono in libs/raylib_lib
-        run: sudo apt-get update && sudo apt-get install -y build-essential libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev curl tar gzip
+          curl -L -O "
 
-      - name: Setup macOS Dependencies
+          "
+          tar -xzf raylib-5.5_linux_amd64.tar.gz
+          mv raylib-5.5_linux_amd64 raylib_lib
+
+      - name: Setup macOS (Brew Install)
         if: matrix.os == 'macos-latest'
-        run: brew install raylib # Su Mac usiamo ancora brew
+        run: brew install raylib
+
+      - name: Setup Windows (Download Raylib 5.5)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Invoke-RestMethod -Uri "
+
+          " -OutFile raylib.zip
+          Expand-Archive -Path raylib.zip -DestinationPath .
+          Move-Item -Path "raylib-5.5_win64_mingw-w64" -Destination "raylib_lib"
 
       # --- 2. COMPILAZIONE ---
       - name: Find Source File
         id: find_source
-        # Trova il file sorgente da compilare
         run: echo "SOURCE_FILE=$(find ./Drawer -maxdepth 1 -name "*.cpp" | head -n 1)" >> $GITHUB_ENV
 
       - name: Compile Linux
         if: matrix.os == 'ubuntu-latest'
-        # Usiamo i file locali di Windows, ma li linkiamo su Linux
-        run: g++ ${{ env.SOURCE_FILE }} -o drawer_linux -I./libs/raylib_lib/include -L./libs/raylib_lib/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+        run: g++ ${{ env.SOURCE_FILE }} -o drawer_linux -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
       - name: Compile macOS
         if: matrix.os == 'macos-latest'
@@ -41,8 +55,8 @@ jobs:
 
       - name: Compile Windows
         if: matrix.os == 'windows-latest'
-        # Usiamo i file locali in libs/raylib_lib e risolviamo l'errore WinMain
-        run: g++ ${{ env.SOURCE_FILE }} -o drawer.exe -I./libs/raylib_lib/include -L./libs/raylib_lib/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+        # Aggiunto -DRAYLIB_IMPLEMENTATION per risolvere l'errore WinMain
+        run: g++ ${{ env.SOURCE_FILE }} -o drawer.exe -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows -DRAYLIB_IMPLEMENTATION
 
       # --- 3. UPLOAD CON DLL ---
       - name: Upload Artifacts
@@ -54,5 +68,4 @@ jobs:
             Drawer/*.ttf
             Drawer/*.png
             Drawer/*.ico
-            # Includiamo la DLL che si trova nella cartella 'lib'
-            libs/raylib_lib/lib/*.dll
+            raylib_lib/bin/*.dll
