@@ -4,8 +4,8 @@ on: [push]
 
 jobs:
   build:
-    permissions: write-all
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -13,21 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Raylib (Linux)
+      - name: Setup Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install libraylib-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev
+          sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
 
-      - name: Install Raylib (macOS)
+      - name: Setup macOS Dependencies
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      - name: Install Raylib (Windows)
+      - name: Setup Windows Dependencies
         if: matrix.os == 'windows-latest'
         run: |
-          vcpkg install raylib:x64-windows
-          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+          curl -L -o raylib_win.zip https://github.com
+          7z x raylib_win.zip
+          mv raylib-5.0_win64_mingw-w64 raylib_win
 
       - name: Compile (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -35,11 +36,11 @@ jobs:
 
       - name: Compile (macOS)
         if: matrix.os == 'macos-latest'
-        run: g++ main.cpp -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL
+        run: g++ main.cpp -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
 
       - name: Compile (Windows)
         if: matrix.os == 'windows-latest'
-        run: g++ main.cpp -o drawer.exe -O2 -lraylib -lopengl32 -gdi32 -lwinmm -mwindows
+        run: g++ main.cpp -o drawer.exe -Iraylib_win/include -Lraylib_win/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -47,4 +48,5 @@ jobs:
           name: drawer-${{ matrix.os }}
           path: |
             drawer*
-            font.ttf
+            *.ttf
+            *.png
