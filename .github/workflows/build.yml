@@ -41,24 +41,22 @@ jobs:
 
       - name: Compile
         run: |
-          # Cerchiamo il file .cpp ovunque nel repository
           SOURCE_FILE=$(find . -maxdepth 3 -name "*.cpp" | head -n 1)
-          
-          if [ -z "$SOURCE_FILE" ]; then
-            echo "ERRORE: Nessun file .cpp trovato nel repository!"
-            exit 1
-          fi
-          
           echo "Compilazione di: $SOURCE_FILE"
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
             g++ "$SOURCE_FILE" -o drawer_linux -I./raylib-5.0_linux_amd64/include -L./raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
           elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-            g++ "$SOURCE_FILE" -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+            # Fix per macOS: aggiungiamo i percorsi standard di Homebrew
+            clang++ "$SOURCE_FILE" -o drawer_mac \
+              -L/usr/local/lib -I/usr/local/include \
+              -L/opt/homebrew/lib -I/opt/homebrew/include \
+              -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
           else
             g++ "$SOURCE_FILE" -o drawer.exe -I./raylib-5.0_win64_mingw-w64/include -L./raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
           fi
         shell: bash
+
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
