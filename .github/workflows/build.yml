@@ -10,24 +10,18 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: drawer_linux
-            cmd: g++ main.cpp -o drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+            cmd: g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
           - os: macos-latest
             artifact: drawer_mac
-            cmd: g++ main.cpp -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+            cmd: g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
           - os: windows-latest
             artifact: drawer.exe
-            cmd: g++ main.cpp -o drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+            cmd: g++ main.cpp -o ../drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
-
-      # Assicura che il file si chiami main.cpp (anche se lo hai caricato con altro nome)
-      - name: Rename source
-        run: |
-          if [ -f *.cpp ]; then cp *.cpp main.cpp; fi
-        shell: bash
 
       - name: Install Raylib (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -41,21 +35,22 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           vcpkg install raylib:x64-windows-static
-          echo "VCPKG_POLICY_EMPTY_PACKAGE=1" >> $GITHUB_ENV
 
-      - name: Compile
-        run: ${{ matrix.cmd }}
-        # Se vcpkg è usato, Windows ha bisogno di un aiuto extra per i percorsi
+      - name: Compile Unix (Linux/Mac)
         if: matrix.os != 'windows-latest'
+        working-directory: ./Drawer
+        run: ${{ matrix.cmd }}
 
-      - name: Compile Windows (Special)
+      - name: Compile Windows
         if: matrix.os == 'windows-latest'
-        run: g++ main.cpp -o drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+        working-directory: ./Drawer
+        run: g++ main.cpp -o ../drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
-      - name: Upload
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             drawer*
-            *.ttf
+            Drawer/*.ttf
+            Drawer/*.png
