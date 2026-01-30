@@ -31,11 +31,9 @@ jobs:
       # --- SETUP WINDOWS (5.5) ---
       - name: Setup Windows
         if: matrix.os == 'windows-latest'
-        shell: powershell
         run: |
-          # Scarica il file usando il comando specifico di PowerShell
-          Invoke-WebRequest -Uri "https://github.com" -OutFile "raylib.zip"
-          Expand-Archive -Path "raylib.zip" -DestinationPath "."
+          # Usiamo 7z per scaricare ed estrarre in un colpo solo
+          7z x https://github.com -o.
           Move-Item -Path "raylib-5.5_win64_mingw-w64" -Destination "raylib_lib"
 
       # --- COMPILAZIONE UNIVERSALE ---
@@ -62,5 +60,4 @@ jobs:
             Drawer/*.ttf
             Drawer/*.png
             Drawer/*.ico
-            # Includiamo le DLL necessarie per la portabilità su Windows
             raylib_lib/bin/*.dll
