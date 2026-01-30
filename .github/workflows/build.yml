@@ -19,7 +19,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev curl tar gzip
-          curl -L "https://github.com" -o raylib.tar.gz
+          curl -L "
+
+          " -o raylib.tar.gz
           tar -xzf raylib.tar.gz
           mv raylib-5.5_linux_amd64 raylib_lib
 
@@ -32,13 +34,18 @@ jobs:
       - name: Setup Windows
         if: matrix.os == 'windows-latest'
         run: |
-          curl -L "https://github.com" -o raylib.zip
-          7z x raylib.zip -o.
+          # Usiamo curl -O (maiuscolo) per salvare con il nome corretto
+          curl -L -O "
+
+          "
+          7z x raylib-5.5_win64_mingw-w64.zip -o.
+          # Rinominiamo la cartella estratta in modo affidabile
           Move-Item -Path "raylib-5.5_win64_mingw-w64" -Destination "raylib_lib"
 
       # --- COMPILAZIONE UNIVERSALE ---
       - name: Compile
         run: |
+          # Trova il file .cpp all'interno della cartella Drawer
           SOURCE_FILE=$(find ./Drawer -maxdepth 1 -name "*.cpp" | head -n 1)
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
@@ -60,4 +67,5 @@ jobs:
             Drawer/*.ttf
             Drawer/*.png
             Drawer/*.ico
+            # Includiamo le DLL necessarie per la portabilità su Windows
             raylib_lib/bin/*.dll
