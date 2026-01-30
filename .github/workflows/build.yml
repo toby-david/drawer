@@ -13,52 +13,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Diagnostica Totale: Vediamo cosa vede GitHub
-      - name: Debug - List All Files
-        run: |
-          echo "Cartella attuale:"
-          pwd
-          echo "Contenuto cartella root:"
-          ls -R
-
-      - name: Setup Linux Dependencies
+      # --- SETUP LINUX (5.5) ---
+      - name: Setup Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev
-          curl -L -o raylib_linux.tar.gz https://github.com
-          tar -xzf raylib_linux.tar.gz
+          curl -L -o raylib.tar.gz https://github.com
+          tar -xzf raylib.tar.gz
+          mv raylib-5.5_linux_amd64 raylib_lib
 
-      - name: Setup macOS Dependencies
+      # --- SETUP MACOS ---
+      - name: Setup macOS
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      - name: Setup Windows Dependencies
+      # --- SETUP WINDOWS (5.5) ---
+      - name: Setup Windows
         if: matrix.os == 'windows-latest'
         run: |
-          curl -L -o raylib_win.zip https://github.com
-          7z x raylib_win.zip
+          curl -L -o raylib.zip https://github.com
+          7z x raylib.zip
+          mv raylib-5.5_win64_mingw-w64 raylib_lib
 
+      # --- COMPILAZIONE UNIVERSALE ---
       - name: Compile
         run: |
           SOURCE_FILE=$(find . -maxdepth 3 -name "*.cpp" | head -n 1)
           echo "Compilazione di: $SOURCE_FILE"
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            g++ "$SOURCE_FILE" -o drawer_linux -I./raylib-5.0_linux_amd64/include -L./raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+            g++ "$SOURCE_FILE" -o drawer_linux -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
           elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-            # Fix per macOS: aggiungiamo i percorsi standard di Homebrew
-            clang++ "$SOURCE_FILE" -o drawer_mac \
-              -L/usr/local/lib -I/usr/local/include \
-              -L/opt/homebrew/lib -I/opt/homebrew/include \
-              -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+            clang++ "$SOURCE_FILE" -o drawer_mac -L/usr/local/lib -I/usr/local/include -L/opt/homebrew/lib -I/opt/homebrew/include -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
           else
-            g++ "$SOURCE_FILE" -o drawer.exe -I./raylib-5.0_win64_mingw-w64/include -L./raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+            g++ "$SOURCE_FILE" -o drawer.exe -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
           fi
         shell: bash
 
-
-      - name: Upload Artifacts
+      # --- UPLOAD ---
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: drawer-${{ matrix.os }}
