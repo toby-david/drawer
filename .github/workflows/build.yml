@@ -13,44 +13,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. INSTALLAZIONE LIBRERIE
-      - name: Install Dependencies (Linux)
+      # --- SETUP LINUX ---
+      - name: Setup Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
+          sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev
+          curl -L -o raylib_linux.tar.gz https://github.com
+          tar -xzf raylib_linux.tar.gz
 
-      - name: Install Dependencies (macOS)
+      # --- SETUP MACOS ---
+      - name: Setup macOS
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      - name: Install Dependencies (Windows)
+      # --- SETUP WINDOWS ---
+      - name: Setup Windows
         if: matrix.os == 'windows-latest'
         run: |
-          vcpkg install raylib:x64-windows
-          # Aggiungiamo i percorsi di vcpkg al sistema
-          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+          curl -L -o raylib_win.zip https://github.com
+          7z x raylib_win.zip
 
-      # 2. COMPILAZIONE (Entrando nella cartella Drawer)
-      - name: Compile (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      # --- COMPILAZIONE ---
+      - name: Compile
         run: |
           cd Drawer
-          g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -dl -rt -lX11
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            g++ main.cpp -o ../drawer_linux -I../raylib-5.0_linux_amd64/include -L../raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+          else
+            g++ main.cpp -o ../drawer.exe -I../raylib-5.0_win64_mingw-w64/include -L../raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+          fi
+        shell: bash
 
-      - name: Compile (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          cd Drawer
-          g++ main.cpp -o ../drawer_mac -L/usr/local/lib -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
-
-      - name: Compile (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd Drawer
-          g++ main.cpp -o ../drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
-
-      # 3. SALVATAGGIO FILE
+      # --- UPLOAD ---
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
