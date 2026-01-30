@@ -1,4 +1,4 @@
-name: Build All Platforms
+name: Build All Platforms (Static Linking)
 
 on: [push, workflow_dispatch]
 
@@ -14,51 +14,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- 1. SETUP DIPENDENZE E DOWNLOAD ---
-      - name: Setup Linux (Download Raylib 5.5)
+      # --- 1. SETUP DIPENDENZE E LIBRERIE STATICHE ---
+      - name: Setup Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev curl tar gzip
-          curl -L -O "
+        # Su Linux installeremo le librerie di base e le linkeremo staticamente
+        run: sudo apt-get update && sudo apt-get install -y build-essential libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libasound2-dev
 
-          "
-          tar -xzf raylib-5.5_linux_amd64.tar.gz
-          mv raylib-5.5_linux_amd64 raylib_lib
-
-      - name: Setup macOS (Brew Install)
+      - name: Setup macOS Dependencies
         if: matrix.os == 'macos-latest'
-        run: brew install raylib
+        run: brew install raylib # Su Mac usiamo ancora brew standard
 
-      - name: Setup Windows (Download Raylib 5.5)
+      - name: Setup Windows Dependencies (Static via Vcpkg)
         if: matrix.os == 'windows-latest'
-        shell: powershell
-        run: |
-          Invoke-RestMethod -Uri "
+        run: vcpkg install raylib:x64-windows-static
 
-          " -OutFile raylib.zip
-          Expand-Archive -Path raylib.zip -DestinationPath .
-          Move-Item -Path "raylib-5.5_win64_mingw-w64" -Destination "raylib_lib"
-
-      # --- 2. COMPILAZIONE ---
+      # --- 2. COMPILAZIONE STATICA ---
       - name: Find Source File
         id: find_source
         run: echo "SOURCE_FILE=$(find ./Drawer -maxdepth 1 -name "*.cpp" | head -n 1)" >> $GITHUB_ENV
 
-      - name: Compile Linux
+      - name: Compile Linux (Static Link)
         if: matrix.os == 'ubuntu-latest'
-        run: g++ ${{ env.SOURCE_FILE }} -o drawer_linux -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+        # Aggiungiamo -static e -DRAYLIB_STATIC
+        run: g++ ${{ env.SOURCE_FILE }} -o drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -static -DRAYLIB_STATIC
 
       - name: Compile macOS
         if: matrix.os == 'macos-latest'
         run: clang++ ${{ env.SOURCE_FILE }} -o drawer_mac -L/usr/local/lib -I/usr/local/include -L/opt/homebrew/lib -I/opt/homebrew/include -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
 
-      - name: Compile Windows
+      - name: Compile Windows (Static Link)
         if: matrix.os == 'windows-latest'
-        # Aggiunto -DRAYLIB_IMPLEMENTATION per risolvere l'errore WinMain
-        run: g++ ${{ env.SOURCE_FILE }} -o drawer.exe -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows -DRAYLIB_IMPLEMENTATION
+        # Vcpkg gestisce i percorsi, noi aggiungiamo -DRAYLIB_STATIC
+        run: g++ ${{ env.SOURCE_FILE }} -o drawer.exe -DRAYLIB_STATIC -mwindows
 
-      # --- 3. UPLOAD CON DLL ---
+      # --- 3. UPLOAD (Nessuna DLL necessaria) ---
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -68,4 +57,3 @@ jobs:
             Drawer/*.ttf
             Drawer/*.png
             Drawer/*.ico
-            raylib_lib/bin/*.dll
