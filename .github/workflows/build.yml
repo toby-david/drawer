@@ -13,7 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- SETUP LINUX ---
+      # Diagnostica: Vediamo esattamente cosa hai caricato
+      - name: List Files
+        run: ls -R
+
+      # --- SETUP ---
       - name: Setup Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -22,28 +26,29 @@ jobs:
           curl -L -o raylib_linux.tar.gz https://github.com
           tar -xzf raylib_linux.tar.gz
 
-      # --- SETUP MACOS ---
       - name: Setup macOS
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      # --- SETUP WINDOWS ---
       - name: Setup Windows
         if: matrix.os == 'windows-latest'
         run: |
           curl -L -o raylib_win.zip https://github.com
           7z x raylib_win.zip
 
-      # --- COMPILAZIONE ---
+      # --- COMPILAZIONE "INTELLIGENTE" ---
       - name: Compile
         run: |
-          cd Drawer
+          # Trova il primo file .cpp dentro Drawer o sottocartelle
+          SOURCE=$(find . -name "*.cpp" | head -n 1)
+          echo "Compiling source: $SOURCE"
+          
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            g++ main.cpp -o ../drawer_linux -I../raylib-5.0_linux_amd64/include -L../raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+            g++ "$SOURCE" -o drawer_linux -I${{ github.workspace }}/raylib-5.0_linux_amd64/include -L${{ github.workspace }}/raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
           elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-            g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+            g++ "$SOURCE" -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
           else
-            g++ main.cpp -o ../drawer.exe -I../raylib-5.0_win64_mingw-w64/include -L../raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+            g++ "$SOURCE" -o drawer.exe -I${{ github.workspace }}/raylib-5.0_win64_mingw-w64/include -L${{ github.workspace }}/raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
           fi
         shell: bash
 
@@ -54,5 +59,5 @@ jobs:
           name: drawer-${{ matrix.os }}
           path: |
             drawer*
-            Drawer/*.ttf
-            Drawer/*.png
+            **/*.ttf
+            **/*.png
