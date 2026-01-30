@@ -39,7 +39,6 @@ jobs:
       # --- COMPILAZIONE UNIVERSALE ---
       - name: Compile
         run: |
-          # Trova il file .cpp all'interno della cartella Drawer
           SOURCE_FILE=$(find ./Drawer -maxdepth 1 -name "*.cpp" | head -n 1)
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
@@ -51,7 +50,7 @@ jobs:
           fi
         shell: bash
 
-      # --- UPLOAD ---
+      # --- UPLOAD CON DLL ---
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -61,3 +60,5 @@ jobs:
             Drawer/*.ttf
             Drawer/*.png
             Drawer/*.ico
+            # Includiamo le DLL necessarie per la portabilità su Windows
+            raylib_lib/bin/*.dll
