@@ -1,6 +1,6 @@
 name: Build All Platforms
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -13,12 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Diagnostica: Vediamo esattamente cosa hai caricato
-      - name: List Files
-        run: ls -R
+      # Diagnostica Totale: Vediamo cosa vede GitHub
+      - name: Debug - List All Files
+        run: |
+          echo "Cartella attuale:"
+          pwd
+          echo "Contenuto cartella root:"
+          ls -R
 
-      # --- SETUP ---
-      - name: Setup Linux
+      - name: Setup Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
@@ -26,34 +29,38 @@ jobs:
           curl -L -o raylib_linux.tar.gz https://github.com
           tar -xzf raylib_linux.tar.gz
 
-      - name: Setup macOS
+      - name: Setup macOS Dependencies
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      - name: Setup Windows
+      - name: Setup Windows Dependencies
         if: matrix.os == 'windows-latest'
         run: |
           curl -L -o raylib_win.zip https://github.com
           7z x raylib_win.zip
 
-      # --- COMPILAZIONE "INTELLIGENTE" ---
       - name: Compile
         run: |
-          # Trova il primo file .cpp dentro Drawer o sottocartelle
-          SOURCE=$(find . -name "*.cpp" | head -n 1)
-          echo "Compiling source: $SOURCE"
+          # Cerchiamo il file .cpp ovunque nel repository
+          SOURCE_FILE=$(find . -maxdepth 3 -name "*.cpp" | head -n 1)
+          
+          if [ -z "$SOURCE_FILE" ]; then
+            echo "ERRORE: Nessun file .cpp trovato nel repository!"
+            exit 1
+          fi
+          
+          echo "Compilazione di: $SOURCE_FILE"
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            g++ "$SOURCE" -o drawer_linux -I${{ github.workspace }}/raylib-5.0_linux_amd64/include -L${{ github.workspace }}/raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+            g++ "$SOURCE_FILE" -o drawer_linux -I./raylib-5.0_linux_amd64/include -L./raylib-5.0_linux_amd64/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
           elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-            g++ "$SOURCE" -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+            g++ "$SOURCE_FILE" -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
           else
-            g++ "$SOURCE" -o drawer.exe -I${{ github.workspace }}/raylib-5.0_win64_mingw-w64/include -L${{ github.workspace }}/raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+            g++ "$SOURCE_FILE" -o drawer.exe -I./raylib-5.0_win64_mingw-w64/include -L./raylib-5.0_win64_mingw-w64/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
           fi
         shell: bash
 
-      # --- UPLOAD ---
-      - name: Upload
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: drawer-${{ matrix.os }}
