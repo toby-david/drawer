@@ -1,4 +1,4 @@
-name: Build Password Manager
+name: Build All Platforms
 
 on: [push]
 
@@ -7,46 +7,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact: drawer_linux
+            cmd: g++ main.cpp -o drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+          - os: macos-latest
+            artifact: drawer_mac
+            cmd: g++ main.cpp -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+          - os: windows-latest
+            artifact: drawer.exe
+            cmd: g++ main.cpp -o drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
+      # Assicura che il file si chiami main.cpp (anche se lo hai caricato con altro nome)
+      - name: Rename source
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
+          if [ -f *.cpp ]; then cp *.cpp main.cpp; fi
+        shell: bash
 
-      - name: Setup macOS Dependencies
+      - name: Install Raylib (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libraylib-dev
+
+      - name: Install Raylib (macOS)
         if: matrix.os == 'macos-latest'
         run: brew install raylib
 
-      - name: Setup Windows Dependencies
+      - name: Install Raylib (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          curl -L -o raylib_win.zip https://github.com
-          7z x raylib_win.zip
-          mv raylib-5.0_win64_mingw-w64 raylib_win
+          vcpkg install raylib:x64-windows-static
+          echo "VCPKG_POLICY_EMPTY_PACKAGE=1" >> $GITHUB_ENV
 
-      - name: Compile (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: g++ main.cpp -o drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+      - name: Compile
+        run: ${{ matrix.cmd }}
+        # Se vcpkg è usato, Windows ha bisogno di un aiuto extra per i percorsi
+        if: matrix.os != 'windows-latest'
 
-      - name: Compile (macOS)
-        if: matrix.os == 'macos-latest'
-        run: g++ main.cpp -o drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
-
-      - name: Compile (Windows)
+      - name: Compile Windows (Special)
         if: matrix.os == 'windows-latest'
-        run: g++ main.cpp -o drawer.exe -Iraylib_win/include -Lraylib_win/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+        run: g++ main.cpp -o drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
-      - name: Upload Artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: drawer-${{ matrix.os }}
+          name: ${{ matrix.artifact }}
           path: |
             drawer*
             *.ttf
-            *.png
