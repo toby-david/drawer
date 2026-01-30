@@ -34,13 +34,13 @@ jobs:
         run: |
           curl -L -o raylib.zip https://github.com
           7z x raylib.zip
-          mv raylib-5.5_win64_mingw-w64 raylib_lib
+          Move-Item -Path "raylib-5.5_win64_mingw-w64" -Destination "raylib_lib"
 
       # --- COMPILAZIONE UNIVERSALE ---
       - name: Compile
         run: |
-          SOURCE_FILE=$(find . -maxdepth 3 -name "*.cpp" | head -n 1)
-          echo "Compilazione di: $SOURCE_FILE"
+          # Trova il file .cpp all'interno della cartella Drawer
+          SOURCE_FILE=$(find ./Drawer -maxdepth 1 -name "*.cpp" | head -n 1)
           
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
             g++ "$SOURCE_FILE" -o drawer_linux -I./raylib_lib/include -L./raylib_lib/lib -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
@@ -52,11 +52,12 @@ jobs:
         shell: bash
 
       # --- UPLOAD ---
-      - name: Upload
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: drawer-${{ matrix.os }}
           path: |
             drawer*
-            **/*.ttf
-            **/*.png
+            Drawer/*.ttf
+            Drawer/*.png
+            Drawer/*.ico
