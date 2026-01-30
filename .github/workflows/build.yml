@@ -7,49 +7,47 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: drawer_linux
-            cmd: g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
-          - os: macos-latest
-            artifact: drawer_mac
-            cmd: g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
-          - os: windows-latest
-            artifact: drawer.exe
-            cmd: g++ main.cpp -o ../drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
-
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Raylib (Linux)
+      # Diagnostica: Vediamo dove sono i file
+      - name: List Files
+        run: ls -R
+
+      # Configura Raylib in modo professionale
+      - name: Setup Raylib
+        id: raylib
+        uses: mupuf/setup-raylib@v2
+
+      - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libraylib-dev
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
 
-      - name: Install Raylib (macOS)
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd Drawer
+          g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+
+      - name: Build (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install raylib
+        run: |
+          cd Drawer
+          g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
 
-      - name: Install Raylib (Windows)
+      - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          vcpkg install raylib:x64-windows-static
-
-      - name: Compile Unix (Linux/Mac)
-        if: matrix.os != 'windows-latest'
-        working-directory: ./Drawer
-        run: ${{ matrix.cmd }}
-
-      - name: Compile Windows
-        if: matrix.os == 'windows-latest'
-        working-directory: ./Drawer
-        run: g++ main.cpp -o ../drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows-static/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+          cd Drawer
+          g++ main.cpp -o ../drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: drawer-${{ matrix.os }}
           path: |
             drawer*
             Drawer/*.ttf
