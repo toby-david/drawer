@@ -13,38 +13,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Diagnostica: Vediamo dove sono i file
-      - name: List Files
-        run: ls -R
-
-      # Configura Raylib in modo professionale
-      - name: Setup Raylib
-        id: raylib
-        uses: mupuf/setup-raylib@v2
-
-      - name: Install Linux Dependencies
+      # 1. INSTALLAZIONE LIBRERIE
+      - name: Install Dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libxcursor-dev libxinerama-dev
 
-      - name: Build (Linux)
+      - name: Install Dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install raylib
+
+      - name: Install Dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          vcpkg install raylib:x64-windows
+          # Aggiungiamo i percorsi di vcpkg al sistema
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      # 2. COMPILAZIONE (Entrando nella cartella Drawer)
+      - name: Compile (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           cd Drawer
-          g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+          g++ main.cpp -o ../drawer_linux -lraylib -lGL -lm -lpthread -dl -rt -lX11
 
-      - name: Build (macOS)
+      - name: Compile (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           cd Drawer
-          g++ main.cpp -o ../drawer_mac -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
+          g++ main.cpp -o ../drawer_mac -L/usr/local/lib -lraylib -framework CoreVideo -framework IOKit -framework Cocoa -framework OpenGL
 
-      - name: Build (Windows)
+      - name: Compile (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd Drawer
-          g++ main.cpp -o ../drawer.exe -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
+          g++ main.cpp -o ../drawer.exe -I${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/include -L${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
 
-      - name: Upload Artifacts
+      # 3. SALVATAGGIO FILE
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: drawer-${{ matrix.os }}
