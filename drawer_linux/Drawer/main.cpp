@@ -14,8 +14,6 @@ struct Credenziale {
     string dati;
     string note;
     float altezzaCorrente = 45.0f;
-    float alpha = 0.0f; 
-    float alphaNote = 0.0f; 
     bool espanso = false;
     bool visibile = false; 
 };
@@ -50,26 +48,14 @@ string generaPass(int len = 16) {
     return res;
 }
 
-Color GetPassStrengthColor(const char* p) {
-    string s = p;
-    if (s.length() == 0) return DARKGRAY;
-    int score = 0;
-    if (s.length() >= 8) score++;
-    if (s.length() >= 12) score++;
-    if (s.find_first_of("0123456789") != string::npos) score++;
-    if (s.find_first_of("!@#$%^&*()") != string::npos) score++;
-    if (score <= 1) return RED;
-    if (score <= 3) return YELLOW;
-    return GREEN;
-}
-
 // --- UTILITY DISEGNO ---
 void DrawSText(Font font, const char* text, Rectangle rec, float size, Color col, bool focus, int frms, const char* ph) {
     float tw = MeasureTextEx(font, text, size, 1).x;
     float off = (tw > rec.width - 20) ? tw - (rec.width - 20) : 0;
+    
+    DrawRectangleLinesEx(rec, 1, focus ? RED : DARKGRAY);
     if (focus) DrawRectangleLinesEx({rec.x-2, rec.y-2, rec.width+4, rec.height+4}, 1, Fade(RED, sinf(GetTime()*10)*0.5f + 0.5f));
     
-    // Testo visibile senza ScissorMode per evitare bug di coordinate su Linux
     if (strlen(text) == 0 && !focus) {
         DrawTextEx(font, ph, { rec.x + 10, rec.y + rec.height/2 - size/2 }, size, 1, DARKGRAY);
     } else {
@@ -85,21 +71,17 @@ void DrawCenteredText(Font font, const char* text, Rectangle rec, float size, Co
     DrawTextEx(font, text, { rec.x + rec.width/2 - ts.x/2, rec.y + rec.height/2 - ts.y/2 }, size, 1, col);
 }
 
-// --- MAIN ---
 int main() {
     const int sw = 1000; const int sh = 750;
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(sw, sh, "Drawer - The Ultimate Password Manager");
     SetTargetFPS(60);
 
-    Image icon = LoadImage("icon.png"); 
-    if (icon.data != NULL) { SetWindowIcon(icon); UnloadImage(icon); }
-
     Font fHD = LoadFontEx("font.ttf", 96, 0, 250);
     if (fHD.texture.id == 0) fHD = GetFontDefault();
     SetTextureFilter(fHD.texture, TEXTURE_FILTER_BILINEAR);
 
-    bool login = false, erroreLogin = false, caricato = false, menuAperto = false, modalitaReset = false;
+    bool login = false, caricato = false, menuAperto = false;
     bool primoAvvio = !FileExists("config.dat");
     
     int deleteIndex = -1, focus = 0, frames = 0, editingIndex = -1;
@@ -108,7 +90,7 @@ int main() {
     vector<Credenziale> elenco;
     string masterPass = primoAvvio ? "" : caricaMaster();
 
-    float transX = 0.0f, menuY = (float)sh, copyTimer = 0.0f, scrollY = 0.0f, errorShake = 0.0f, timerInattivita = 0.0f; 
+    float transX = 0.0f, menuY = (float)sh, copyTimer = 0.0f, scrollY = 0.0f, errorShake = 0.0f; 
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -119,6 +101,14 @@ int main() {
         int cw = GetScreenWidth(); 
         int ch = GetScreenHeight();
         Vector2 mPos = GetMousePosition();
+
+        auto DrawBtn = [&](Rectangle r, Color c, const char* t) -> bool {
+            bool h = CheckCollisionPointRec(mPos, r);
+            DrawRectangleLinesEx(r, 1, h ? WHITE : c);
+            if (h) DrawRectangleRec(r, Fade(c, 0.2f));
+            DrawCenteredText(fHD, t, r, 14, h ? WHITE : c);
+            return h && IsMouseButtonPressed(0);
+        };
 
         // --- GESTIONE INPUT ---
         char* currentBuffer = nullptr;
@@ -145,14 +135,12 @@ int main() {
             }
         }
 
-        // --- LOGIN LOGIC ---
         if (!login && IsKeyPressed(KEY_ENTER)) {
             if (primoAvvio) { masterPass = pIn; salvaMaster(masterPass); primoAvvio = false; memset(pIn, 0, 64); }
-            else if (string(pIn) == masterPass) { if(modalitaReset){primoAvvio=true; modalitaReset=false;} else login = true; erroreLogin = false; memset(pIn, 0, 64); }
-            else { erroreLogin = true; errorShake = 1.0f; memset(pIn, 0, 64); }
+            else if (string(pIn) == masterPass) { login = true; errorShake = 0; memset(pIn, 0, 64); }
+            else { errorShake = 1.0f; memset(pIn, 0, 64); }
         }
 
-        // --- ANIMAZIONI ---
         float targetX = login ? -(float)cw : 0.0f;
         transX += (targetX - transX) * (1.0f - expf(-10.0f * dt));
         
@@ -160,7 +148,7 @@ int main() {
             ifstream f("vault.txt"); string r;
             while (getline(f, r)) {
                 size_t pos = r.find('|');
-                if (pos != string::npos) elenco.push_back({decripta(r.substr(0, pos)), decripta(r.substr(pos+1)), 45.0f, 1.0f, 0.0f, false, false});
+                if (pos != string::npos) elenco.push_back({decripta(r.substr(0, pos)), decripta(r.substr(pos+1)), 45.0f, false, false});
             }
             f.close(); caricato = true;
         }
@@ -171,82 +159,95 @@ int main() {
         BeginDrawing();
         ClearBackground(GetColor(0x121212FF));
 
-        // --- RENDER LOGIN ---
-        if (transX > -cw + 1) { 
+        if (transX > -cw + 1) {
             float ox = transX + sinf(GetTime()*60)*(errorShake*10);
-            float lAlpha = 1.0f + (transX / cw); 
-            const char* tit = primoAvvio ? "CREATE MASTER PASSWORD" : (modalitaReset ? "VERIFY OLD PASSWORD" : "LOGIN");
-            DrawCenteredText(fHD, tit, {ox, (float)ch/2 - 100, (float)cw, 50}, 32, Fade(RED, lAlpha));
+            DrawCenteredText(fHD, primoAvvio ? "CREATE MASTER PASS" : "LOGIN", {ox, (float)ch/2 - 100, (float)cw, 50}, 32, RED);
             Rectangle rL = { ox + (float)cw/2 - 150, (float)ch/2 - 30, 300, 50 };
-            DrawRectangleLinesEx(rL, 2, Fade(RED, lAlpha));
-            string ast(strlen(pIn), '*'); 
-            DrawSText(fHD, ast.c_str(), rL, 28, Fade(WHITE, lAlpha), (!login), frames, "KEY");
+            string ast(strlen(pIn), '*');
+            DrawSText(fHD, ast.c_str(), rL, 28, WHITE, !login, frames, "KEY");
         }
 
-        // --- RENDER VAULT ---
-        if (transX < -1) { 
+        if (transX < -1) {
             float ox = transX + cw;
             DrawRectangle(ox, 0, cw, 70, GetColor(0x1A1A1AFF));
             
-            Rectangle rLogout = { ox + 30, 20, 100, 35 };
-            bool hLog = CheckCollisionPointRec(mPos, rLogout);
-            if(hLog && IsMouseButtonPressed(0)) { login = false; focus = 0; caricato = false; elenco.clear(); }
-            DrawTextEx(fHD, "LOGOUT", { ox + 30, 20 }, 30, 2, hLog ? RED : MAROON);
-            
+            Rectangle rLog = { ox + 30, 20, 100, 35 };
+            bool hLog = CheckCollisionPointRec(mPos, rLog);
+            if (hLog && IsMouseButtonPressed(0)) { login = false; caricato = false; elenco.clear(); focus = 0; }
+            DrawTextEx(fHD, "LOGOUT", { rLog.x, rLog.y }, 25, 1, hLog ? WHITE : MAROON);
+
             Rectangle rSearch = { ox + (float)cw - 350, 17, 320, 35 };
             if(IsMouseButtonPressed(0) && CheckCollisionPointRec(mPos, rSearch)) focus = 1;
             DrawSText(fHD, cIn, rSearch, 20, WHITE, (focus==1), frames, "SEARCH...");
-            
-            // Lista Credenziali
+
             BeginScissorMode((int)ox, 75, cw, (int)menuY - 75);
                 float curY = 90 + scrollY;
                 for(int i = 0; i < (int)elenco.size(); i++) {
                     if(strlen(cIn) > 0 && (elenco[i].dati.find(cIn) == string::npos)) continue;
-                    Rectangle itR = { ox + 30, curY, (float)cw-60, 45 };
+                    
+                    float targetH = elenco[i].espanso ? 110.0f : 45.0f;
+                    elenco[i].altezzaCorrente += (targetH - elenco[i].altezzaCorrente) * 0.2f;
+
+                    Rectangle itR = { ox + 30, curY, (float)cw-60, elenco[i].altezzaCorrente };
                     DrawRectangleRec(itR, GetColor(0x1E1E1EFF));
                     
+                    if(IsMouseButtonPressed(0) && CheckCollisionPointRec(mPos, {itR.x, itR.y, itR.width - 400, itR.height})) {
+                        bool statoPrecedente = elenco[i].espanso;
+                        for(auto &c : elenco) c.espanso = false;
+                        elenco[i].espanso = !statoPrecedente;
+                    }
+
                     string sDisp = elenco[i].dati;
-                    if(!elenco[i].visibile) { size_t posS = sDisp.find(" : "); if(posS != string::npos) sDisp = sDisp.substr(0, posS+3) + "********"; }
-                    DrawTextEx(fHD, sDisp.c_str(), { ox + 95, curY+13 }, 20, 1, WHITE);
+                    if(!elenco[i].visibile) {
+                        size_t p = sDisp.find(" : ");
+                        if(p != string::npos) sDisp = sDisp.substr(0, p+3) + "********";
+                    }
+                    DrawTextEx(fHD, sDisp.c_str(), { ox + 50, curY+13 }, 20, 1, WHITE);
                     
-                    // BOTTONI AZIONE CORAZZATI
+                    if(elenco[i].espanso && elenco[i].altezzaCorrente > 75) {
+                        DrawTextEx(fHD, TextFormat("Notes: %s", elenco[i].note.c_str()), { ox + 55, curY+55 }, 17, 1, GRAY);
+                    }
+
                     Rectangle bVw = { ox+cw-380, curY+5, 80, 35 }, bCp = { ox+cw-290, curY+5, 80, 35 }, bEd = { ox+cw-200, curY+5, 80, 35 }, bDl = { ox+cw-110, curY+5, 80, 35 };
                     
-                    auto DrawActionBtn = [&](Rectangle r, Color c, const char* t, int act) {
-                        bool h = CheckCollisionPointRec(mPos, r);
-                        if (h) {
-                            DrawRectangleRec(r, Fade(c, 0.4f));
-                            if (IsMouseButtonPressed(0) && deleteIndex == -1) {
-                                if(act == 0) elenco[i].visibile = !elenco[i].visibile;
-                                if(act == 1) { size_t s = elenco[i].dati.find(" : "); if(s != string::npos) { SetClipboardText(elenco[i].dati.substr(s+3).c_str()); copyTimer = 1.5f; } }
-                                if(act == 2) { editingIndex = i; menuAperto = true; focus = 2; }
-                                if(act == 3) deleteIndex = i;
-                            }
+                    if(DrawBtn(bVw, ORANGE, "VIEW")) elenco[i].visibile = !elenco[i].visibile;
+                    if(DrawBtn(bCp, BLUE, "COPY")) {
+                        size_t s = elenco[i].dati.find(" : ");
+                        if(s != string::npos) { SetClipboardText(elenco[i].dati.substr(s+3).c_str()); copyTimer = 1.5f; }
+                    }
+                    if(DrawBtn(bEd, GRAY, "EDIT")) {
+                        editingIndex = i; menuAperto = true; focus = 2;
+                        size_t pos = elenco[i].dati.find(" : ");
+                        if(pos != string::npos) {
+                            strncpy(sIn, elenco[i].dati.substr(0, pos).c_str(), 127);
+                            strncpy(passIn, elenco[i].dati.substr(pos+3).c_str(), 127);
                         }
-                        DrawRectangleLinesEx(r, 1, h ? WHITE : c);
-                        DrawCenteredText(fHD, t, r, 16, h ? WHITE : c);
-                    };
+                        strncpy(noteIn, elenco[i].note.c_str(), 255);
+                    }
+                    if(DrawBtn(bDl, MAROON, "DEL")) deleteIndex = i;
 
-                    DrawActionBtn(bVw, ORANGE, "VIEW", 0);
-                    DrawActionBtn(bCp, BLUE, "COPY", 1);
-                    DrawActionBtn(bEd, GRAY, "EDIT", 2);
-                    DrawActionBtn(bDl, MAROON, "DEL", 3);
-
-                    curY += 55;
+                    curY += elenco[i].altezzaCorrente + 10;
                 }
             EndScissorMode();
-            
             scrollY += GetMouseWheelMove() * 30;
-            if (scrollY > 0) scrollY = 0;
 
-            // --- PANNELLO AGGIUNGI ---
+            // --- PANNELLO ADD/EDIT (MODIFICATO) ---
             DrawRectangle(ox, (int)menuY, cw, ch, GetColor(0x181818FF)); 
-            DrawLine(ox, (int)menuY, ox+cw, (int)menuY, RED);
-            
             Rectangle hdl = { ox, menuY, (float)cw, 45 };
             bool hHdl = CheckCollisionPointRec(mPos, hdl);
-            if(hHdl && IsMouseButtonPressed(0)) { menuAperto = !menuAperto; focus = 0; }
-            DrawCenteredText(fHD, menuAperto ? "[ CLOSE ]" : "[ ADD NEW CREDENTIAL ]", hdl, 20, hHdl ? WHITE : RED);
+            
+            // LOGICA DI RESET ALLA CHIUSURA
+            if(hHdl && IsMouseButtonPressed(0)) { 
+                menuAperto = !menuAperto; 
+                // Se chiudo il menu, resetto tutto
+                editingIndex = -1; 
+                focus = 0; 
+                memset(sIn, 0, 128); 
+                memset(passIn, 0, 128); 
+                memset(noteIn, 0, 256);
+            }
+            
+            DrawCenteredText(fHD, editingIndex != -1 ? "[ EDIT MODE - CLICK TO CLOSE/RESET ]" : (menuAperto ? "[ CLOSE ]" : "[ ADD NEW CREDENTIAL ]"), hdl, 20, hHdl ? WHITE : RED);
             
             float mY = menuY + 65;
             Rectangle rS = {ox+30, mY, 250, 40}, rP = {ox+290, mY, 250, 40}, bGen = {ox+550, mY, 40, 40}, bA = {ox+(float)cw-320, mY, 290, 40}, rN = {ox+30, mY+60, (float)cw-60, 40};
@@ -257,41 +258,32 @@ int main() {
                 else if(CheckCollisionPointRec(mPos, rN)) focus = 5;
             }
 
-            DrawSText(fHD, sIn, rS, 20, WHITE, (focus==2), frames, "SITE/SERVICE");
+            DrawSText(fHD, sIn, rS, 20, WHITE, (focus==2), frames, "SERVICE");
             DrawSText(fHD, passIn, rP, 20, WHITE, (focus==3), frames, "PASSWORD");
-            DrawSText(fHD, noteIn, rN, 20, WHITE, (focus==5), frames, "NOTES...");
+            DrawSText(fHD, noteIn, rN, 20, WHITE, (focus==5), frames, "NOTES");
 
-            // Tasto Genera
-            bool hGen = CheckCollisionPointRec(mPos, bGen);
-            if(hGen && IsMouseButtonPressed(0)) strncpy(passIn, generaPass().c_str(), 127);
-            DrawRectangleLinesEx(bGen, 1, hGen ? WHITE : GRAY);
-            DrawCenteredText(fHD, "#", bGen, 20, hGen ? WHITE : GRAY);
+            if(DrawBtn(bGen, GRAY, "#")) strncpy(passIn, generaPass().c_str(), 127);
             
-            // Tasto Salva
-            bool hSave = CheckCollisionPointRec(mPos, bA);
-            if(hSave && IsMouseButtonPressed(0)) {
-                if(strlen(sIn)>0) { 
-                    if(editingIndex != -1) { elenco[editingIndex].dati = string(sIn) + " : " + string(passIn); elenco[editingIndex].note = noteIn; editingIndex = -1; }
-                    else elenco.push_back({string(sIn)+" : "+string(passIn), string(noteIn), 45.0f, 1.0f, 0.0f, false, false}); 
-                    salva(elenco); 
+            if(DrawBtn(bA, GREEN, editingIndex != -1 ? "UPDATE" : "SAVE")) {
+                if(strlen(sIn) > 0) {
+                    string d = string(sIn) + " : " + string(passIn);
+                    if(editingIndex != -1) { elenco[editingIndex].dati = d; elenco[editingIndex].note = noteIn; editingIndex = -1; }
+                    else { elenco.push_back({d, string(noteIn), 45.0f, false, false}); }
+                    salva(elenco);
                 }
-                menuAperto = false; memset(sIn,0,128); memset(passIn,0,128); memset(noteIn,0,256);
+                menuAperto = false; focus = 0;
+                memset(sIn, 0, 128); memset(passIn, 0, 128); memset(noteIn, 0, 256);
             }
-            DrawRectangleRec(bA, hSave ? GREEN : DARKGREEN);
-            DrawCenteredText(fHD, editingIndex != -1 ? "UPDATE" : "SAVE", bA, 20, WHITE);
         }
 
-        // --- OVERLAYS ---
         if (deleteIndex != -1) {
-            DrawRectangle(0,0,cw,ch, {0,0,0,220}); 
-            DrawCenteredText(fHD, "CONFIRM DELETE? (Y/N)", {0,(float)ch/2 - 25, (float)cw, 50}, 30, WHITE);
+            DrawRectangle(0,0,cw,ch, {0,0,0,200});
+            DrawCenteredText(fHD, "DELETE? (Y/N)", {0, (float)ch/2, (float)cw, 50}, 30, WHITE);
             if(IsKeyPressed(KEY_Y)) { elenco.erase(elenco.begin()+deleteIndex); salva(elenco); deleteIndex = -1; }
             if(IsKeyPressed(KEY_N)) deleteIndex = -1;
         }
-        if(copyTimer > 0) {
-            DrawRectangle(cw/2-100, 20, 200, 40, DARKGREEN);
-            DrawCenteredText(fHD, "COPIED!", { (float)cw/2-100, 20, 200, 40 }, 20, WHITE);
-        }
+
+        if(copyTimer > 0) DrawCenteredText(fHD, "COPIED TO CLIPBOARD!", {0, 20, (float)cw, 40}, 20, GREEN);
 
         EndDrawing();
     }
